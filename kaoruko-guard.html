@@ -63,7 +63,7 @@ body::before {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding-bottom: 24px;
+  padding-bottom: 80px;
 }
 
 /* ===== ヘッダー ===== */
@@ -567,7 +567,7 @@ input[type="time"] { color-scheme: dark; }
 
 /* ===== チャット ===== */
 .chat-section {
-  margin: 8px 18px 0;
+  margin: 8px 18px;
   display: flex;
   gap: 8px;
   align-items: center;
@@ -757,6 +757,16 @@ input[type="time"] { color-scheme: dark; }
     </div>
   </div>
 
+  <!-- チャット入力（顔の直下） -->
+  <div class="chat-section">
+    <input type="text" class="chat-input" id="chatInput"
+      placeholder="香子さんに話しかける…"
+      onkeydown="if(event.key==='Enter')sendChat()">
+    <button class="send-btn" id="sendBtn" onclick="sendChat()">
+      <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
+    </button>
+  </div>
+
   <!-- 現在地 -->
   <div class="location-bar">
     <span class="location-icon">📍</span>
@@ -845,16 +855,6 @@ input[type="time"] { color-scheme: dark; }
       <button class="btn btn-primary" onclick="saveApiKey()">保存</button>
     </div>
     <div class="api-hint">このページ内のみで使用。外部送信・保存はされません。</div>
-  </div>
-
-  <!-- チャット -->
-  <div class="chat-section">
-    <input type="text" class="chat-input" id="chatInput"
-      placeholder="香子さんに話しかける…"
-      onkeydown="if(event.key==='Enter')sendChat()">
-    <button class="send-btn" id="sendBtn" onclick="sendChat()">
-      <svg viewBox="0 0 24 24"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-    </button>
   </div>
 
 </div><!-- .app -->
@@ -1384,8 +1384,9 @@ function saveApiKey() {
     return;
   }
   state.apiKey = key;
+  localStorage.setItem('kaoruko-api-key', key);
   document.getElementById('apiKeyInput').value = '●'.repeat(20);
-  setBubble('APIキーを設定しました。これでお話もできますね。', 'happy');
+  setBubble('APIキーを保存しました。次回からは自動で読み込まれます。', 'happy');
 }
 
 // ========== Claude API ==========
@@ -1451,6 +1452,14 @@ window.addEventListener('load', () => {
   setEmotion('normal');
   renderDestList();
   renderAlarmList();
+
+  // APIキーをlocalStorageから復元
+  const savedKey = localStorage.getItem('kaoruko-api-key');
+  if (savedKey) {
+    state.apiKey = savedKey;
+    document.getElementById('apiKeyInput').value = '●'.repeat(20);
+    setBubble('守さん、おかえりなさい。今日もよろしくお願いします。', 'happy');
+  }
 });
 </script>
 </body>
