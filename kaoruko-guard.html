@@ -1209,11 +1209,13 @@ function renderDestList() {
   const el = document.getElementById('destList');
   if (state.destinations.length === 0) {
     el.innerHTML = '<div class="no-dest">目的地が設定されていません</div>';
-    return;
+  } else {
+    el.innerHTML = state.destinations.map(d =>
+      `<span class="dest-chip">🎯 ${d.name} <span class="dest-chip-del" onclick="removeDest(${d.id})">×</span></span>`
+    ).join('');
   }
-  el.innerHTML = state.destinations.map(d =>
-    `<span class="dest-chip">🎯 ${d.name} <span class="dest-chip-del" onclick="removeDest(${d.id})">×</span></span>`
-  ).join('');
+  // localStorageに保存
+  localStorage.setItem('kaoruko-destinations', JSON.stringify(state.destinations));
 }
 
 function removeDest(id) {
@@ -1450,7 +1452,6 @@ async function sendChat() {
 // ========== 初期化 ==========
 window.addEventListener('load', () => {
   setEmotion('normal');
-  renderDestList();
   renderAlarmList();
 
   // APIキーをlocalStorageから復元
@@ -1458,6 +1459,20 @@ window.addEventListener('load', () => {
   if (savedKey) {
     state.apiKey = savedKey;
     document.getElementById('apiKeyInput').value = '●'.repeat(20);
+  }
+
+  // 目的地をlocalStorageから復元
+  const savedDests = localStorage.getItem('kaoruko-destinations');
+  if (savedDests) {
+    try {
+      state.destinations = JSON.parse(savedDests);
+    } catch(e) {
+      state.destinations = [];
+    }
+  }
+  renderDestList();
+
+  if (savedKey) {
     setBubble('守さん、おかえりなさい。今日もよろしくお願いします。', 'happy');
   }
 });
