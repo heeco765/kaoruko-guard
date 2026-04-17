@@ -135,14 +135,14 @@ body::before {
 .chara-section {
   display: flex;
   align-items: flex-start;
-  gap: 14px;
-  padding: 16px 18px 12px;
+  gap: 12px;
+  padding: 14px 18px 10px;
 }
 
 /* ワイプフレーム */
 .wipe-frame {
   flex-shrink: 0;
-  width: 88px; height: 88px;
+  width: 120px; height: 120px;
   border-radius: 50%;
   background: var(--card);
   border: 2px solid rgba(201,168,76,0.4);
@@ -454,6 +454,34 @@ input[type="time"] { color-scheme: dark; }
 .dest-chip-del:hover { color: var(--danger); }
 .no-dest { font-size: 12px; color: var(--muted); text-align: center; padding: 6px 0; }
 
+/* 駅候補リスト */
+.station-candidates {
+  background: rgba(245,240,235,0.06);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.station-candidate-item {
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--paper);
+  cursor: pointer;
+  border-bottom: 1px solid rgba(123,79,140,0.1);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.15s;
+}
+.station-candidate-item:last-child { border-bottom: none; }
+.station-candidate-item:hover { background: rgba(123,79,140,0.2); }
+.station-candidate-line {
+  font-size: 10px;
+  color: var(--muted);
+  max-width: 55%;
+  text-align: right;
+  line-height: 1.4;
+}
+
 /* ===== 監視トグル ===== */
 .watch-toggle {
   display: flex;
@@ -758,13 +786,20 @@ input[type="time"] { color-scheme: dark; }
   <!-- 目的地設定 -->
   <div class="section">
     <div class="section-title">◆ 目的地を設定</div>
+    <!-- 駅名検索 -->
     <div class="input-row">
-      <input type="text" id="destName" placeholder="駅名・場所名" style="flex:2">
-      <input type="number" id="alertRadius" placeholder="半径m" value="300" style="flex:1;min-width:72px">
+      <input type="text" id="stationSearch" placeholder="駅名を入力（例：淡路）" style="flex:3"
+        oninput="onStationInput(this.value)"
+        onkeydown="if(event.key==='Enter')searchStation()">
+      <button class="btn btn-primary" onclick="searchStation()">検索</button>
     </div>
-    <div class="btn-row">
-      <button class="btn btn-outline" onclick="getCurrentAsStart()">📍 現在地を起点に</button>
-      <button class="btn btn-primary" onclick="setDestByGPS()">📌 現在地を目的地に</button>
+    <!-- 検索結果候補 -->
+    <div id="stationCandidates" style="display:none;margin-bottom:8px;"></div>
+    <!-- 半径設定 -->
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <span style="font-size:12px;color:var(--muted);white-space:nowrap;">検知半径</span>
+      <input type="number" id="alertRadius" placeholder="300" value="300" style="width:80px;">
+      <span style="font-size:12px;color:var(--muted);">m</span>
     </div>
     <div class="dest-chips" id="destList">
       <div class="no-dest">目的地が設定されていません</div>
@@ -1108,33 +1143,66 @@ async function generateAlertLine(destName, dist) {
   } catch(e) {}
 }
 
-// ========== 目的地管理 ==========
-function setDestByGPS() {
-  const doAdd = (pos) => {
-    state.currentPos = pos;
-    addDestination(pos.coords.latitude, pos.coords.longitude);
-  };
-  if (state.currentPos) doAdd(state.currentPos);
-  else navigator.geolocation.getCurrentPosition(doAdd,
-    () => setBubble('現在地が取得できませんでした。', 'sad'));
+// ========== 駅名検索（HeartRails Express API） ==========
+let searchTimer = null;
+
+function onStationInput(val) {
+  clearTimeout(searchTimer);
+  if (val.length < 1) {
+    hideCandidates();
+    return;
+  }
+  searchTimer = setTimeout(() => searchStation(), 500);
 }
 
-function getCurrentAsStart() {
-  navigator.geolocation.getCurrentPosition(pos => {
-    state.currentPos = pos;
-    const { latitude, longitude } = pos.coords;
-    setBubble(`現在地 (${latitude.toFixed(4)}, ${longitude.toFixed(4)}) を起点として記録しました。`, 'normal');
-  }, () => setBubble('現在地が取得できませんでした。', 'sad'));
+async function searchStation() {
+  const query = document.getElementById('stationSearch').value.trim();
+  if (!query) return;
+
+  const candidatesEl = document.getElementById('stationCandidates');
+  candidatesEl.style.display = 'block';
+  candidatesEl.innerHTML = '<div class="station-candidate-item">検索中…</div>';
+
+  try {
+    const url = `https://express.heartrails.com/api/json?method=getStations&name=${encodeURIComponent(query)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const stations = data.response?.station;
+
+    if (!stations || stations.length === 0) {
+      candidatesEl.innerHTML = '<div class="station-candidate-item" style="color:var(--muted)">駅が見つかりませんでした</div>';
+      return;
+    }
+
+    // 重複除去（同名駅は路線名で区別）
+    candidatesEl.innerHTML = '<div class="station-candidates">' +
+      stations.slice(0, 8).map(s => `
+        <div class="station-candidate-item"
+          onclick="selectStation('${s.name}', ${s.y}, ${s.x}, '${s.line}')">
+          <span>🚉 ${s.name}</span>
+          <span class="station-candidate-line">${s.line}<br>${s.prefecture}</span>
+        </div>
+      `).join('') +
+    '</div>';
+  } catch(e) {
+    candidatesEl.innerHTML = '<div class="station-candidate-item" style="color:var(--muted)">検索に失敗しました</div>';
+  }
 }
 
-function addDestination(lat, lng) {
-  const name = document.getElementById('destName').value.trim() || '目的地';
+function selectStation(name, lat, lng, line) {
   const radius = parseInt(document.getElementById('alertRadius').value) || 300;
   const id = Date.now();
   state.destinations.push({ id, name, lat, lng, radius });
   renderDestList();
-  setBubble(`「${name}」を目的地に設定しました。半径${radius}mでお知らせします。`, 'serious');
-  document.getElementById('destName').value = '';
+  hideCandidates();
+  document.getElementById('stationSearch').value = '';
+  setBubble(`「${name}」（${line}）を目的地に設定しました。半径${radius}mでお知らせします。`, 'serious');
+}
+
+function hideCandidates() {
+  const el = document.getElementById('stationCandidates');
+  el.style.display = 'none';
+  el.innerHTML = '';
 }
 
 function renderDestList() {
